@@ -1,0 +1,129 @@
+version: '3.8'
+
+# MoveIt 2 Docker Compose Configuration for Windows 10/11
+# Based on: https://moveit.picknik.ai/main/doc/how_to_guides/how_to_setup_docker_containers_in_ubuntu.html
+# 
+# Usage:
+#   With GPU (NVIDIA): run .\start.bat gpu
+#   Without GPU:       run .\start.bat cpu
+
+services:
+  # CPU-only configuration (no GPU required)
+  cpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ros2-jazzy-win10:latest
+    container_name: moveit2_container
+    privileged: true
+    network_mode: host
+    command: /bin/bash -c "while true; do sleep 3600; done"
+    stdin_open: true
+    tty: true
+    
+    volumes:
+      # Share workspace to host
+      - ./ros2_ws:/root/ros2_ws
+    
+    environment:
+      # GUI display configuration (Windows needs X Server like VcXsrv or Xming)
+      - DISPLAY=${DISPLAY:-host.docker.internal:0}
+      - QT_X11_NO_MITSHM=1
+      
+      # ROS2 configuration
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
+      
+      # TurtleBot3 model configuration
+      - TURTLEBOT3_MODEL=waffle
+      
+      # OpenGL configuration
+      - LIBGL_ALWAYS_INDIRECT=0
+    
+    # Windows specific configuration
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          cpus: '${CPU_LIMIT:-4}'
+          memory: ${MEMORY_LIMIT:-4G}
+        reservations:
+          cpus: '1'
+          memory: 1G
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "ros2", "topic", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # GPU configuration (NVIDIA GPU required)
+  gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ros2-jazzy-win10:latest
+    container_name: moveit2_container_gpu
+    privileged: true
+    network_mode: host
+    command: /bin/bash -c "while true; do sleep 3600; done"
+    stdin_open: true
+    tty: true
+    
+    volumes:
+      # Share workspace to host
+      - ./ros2_ws:/root/ros2_ws
+    
+    environment:
+      # GUI display configuration
+      - DISPLAY=${DISPLAY:-host.docker.internal:0}
+      - QT_X11_NO_MITSHM=1
+      
+      # ROS2 configuration
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
+      
+      # TurtleBot3 model configuration
+      - TURTLEBOT3_MODEL=waffle
+      
+      # NVIDIA GPU configuration
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - LIBGL_ALWAYS_INDIRECT=0
+    
+    # Windows specific configuration
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    
+    # GPU device access (Windows Docker Desktop + WSL2)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+          cpus: '1'
+          memory: 2G
+        limits:
+          cpus: '${CPU_LIMIT:-4}'
+          memory: ${MEMORY_LIMIT:-8G}
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "ros2", "topic", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
